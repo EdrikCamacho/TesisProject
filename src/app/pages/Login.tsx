@@ -12,19 +12,38 @@ export function Login() {
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const hasError = attempts > 0;
+const handleLogin = async (e?: React.FormEvent) => {
+  if (e) e.preventDefault(); // 🔥 evita recarga
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      if (email === 'admin@smvi.mx' && password === 'admin123') {
-        navigate('/app');
-      } else {
-        setAttempts((a) => a + 1);
-      }
-    }, 800);
-  };
+  try {
+    const res = await fetch("http://localhost:8000/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        email: email.trim(),        // 🔥 evita espacios
+        password: password.trim()   // 🔥 evita espacios
+      })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      localStorage.setItem("user", JSON.stringify(data.user));
+
+      navigate("/app/dashboard"); // 🔥 reemplaza window.location
+    } else {
+      setAttempts(prev => prev + 1);
+    }
+
+  }catch (error) {
+    console.error("Error de red:", error);
+    alert("Error al conectar con el servidor");
+  } finally {
+    setLoading(false); // 🔥 SIEMPRE termina carga
+  }
+};
 
   return (
     <div

@@ -7,7 +7,18 @@ import { Reportes } from './pages/Reportes';
 import { Configuracion } from './pages/Configuracion';
 import { Usuarios } from './pages/Usuarios';
 import { AppProvider } from './context/AppContext';
+import { Navigate } from "react-router";
+import { JSX } from 'react/jsx-runtime';
 
+function ProtectedRoute({ children }: { children: JSX.Element }) {
+  const user = localStorage.getItem("user");
+
+  if (!user) {
+    return <Navigate to="/" replace />;
+  }
+  
+  return children;
+}
 function AppLayout() {
   return (
     <AppProvider>
@@ -16,20 +27,26 @@ function AppLayout() {
   );
 }
 
+
 export const router = createBrowserRouter([
   {
     path: '/',
-    Component: Login,
+    element: <Login />,
   },
   {
     path: '/app',
-    Component: AppLayout,
+    element: (
+      <ProtectedRoute>
+        <AppLayout />
+      </ProtectedRoute>
+    ),
     children: [
-      { index: true, Component: Dashboard },
-      { path: 'alertas', Component: Alertas },
-      { path: 'reportes', Component: Reportes },
-      { path: 'configuracion', Component: Configuracion },
-      { path: 'usuarios', Component: Usuarios },
+      { index: true, element: <Dashboard /> },
+      { path: 'dashboard', element: <Dashboard /> },
+      { path: 'alertas', element: <Alertas /> },
+      { path: 'reportes', element: <Reportes /> },
+      { path: 'configuracion', element: <Configuracion /> },
+      { path: 'usuarios', element: <Usuarios /> },
     ],
   },
 ]);
