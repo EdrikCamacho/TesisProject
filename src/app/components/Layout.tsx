@@ -133,13 +133,13 @@ export function Layout() {
                 style={{ width: 32, height: 32, background: '#1A2B3C', border: '1px solid #263D52' }}>
                 <Users size={14} style={{ color: '#8899AA' }} />
               </div>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: '#E2EAF0' }}>{currentUser.name}</div>
-                <div className="flex items-center gap-1">
-                  <Shield size={10} style={{ color: '#1E90FF' }} />
-                  <span style={{ fontSize: 10, color: '#1E90FF', fontWeight: 500 }}>{currentUser.role}</span>
-                </div>
-              </div>
+               <div>
+                 <div style={{ fontSize: 12, fontWeight: 600, color: '#E2EAF0' }}>{currentUser.role} {currentUser.name}</div>
+                 <div className="flex items-center gap-1">
+                   <Shield size={10} style={{ color: '#1E90FF' }} />
+                   <span style={{ fontSize: 10, color: '#1E90FF', fontWeight: 500 }}>Usuario Activo</span>
+                 </div>
+               </div>
             </div>
             <button
               onClick={() => navigate('/')}

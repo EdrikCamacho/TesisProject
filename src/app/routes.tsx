@@ -11,12 +11,12 @@ import { Navigate } from "react-router";
 import { JSX } from 'react/jsx-runtime';
 
 function ProtectedRoute({ children }: { children: JSX.Element }) {
-  const user = localStorage.getItem("user");
+  const token = localStorage.getItem("token");
 
-  if (!user) {
+  if (!token) {
     return <Navigate to="/" replace />;
   }
-  
+
   return children;
 }
 function AppLayout() {

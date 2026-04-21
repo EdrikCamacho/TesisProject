@@ -3,38 +3,168 @@ import type { ReactNode } from 'react';
 import { useAppContext } from '../context/AppContext';
 import { Plus, Pencil, Trash2, Shield, User, Users, Search, ChevronDown } from 'lucide-react';
 
-const usersData = [
-  { id: 1, name: 'García Morales, José', email: 'jgarcia@smvi.mx', role: 'Operador', status: 'Activo', lastLogin: 'Hoy 14:28', cameras: 3 },
-  { id: 2, name: 'López Hernández, Ana', email: 'alopez@smvi.mx', role: 'Administrador', status: 'Activo', lastLogin: 'Hoy 09:14', cameras: 3 },
-  { id: 3, name: 'Ramírez Torres, Carlos', email: 'cramirez@smvi.mx', role: 'Operador', status: 'Activo', lastLogin: 'Ayer 17:45', cameras: 2 },
-  { id: 4, name: 'Mendoza Ríos, Patricia', email: 'pmendoza@smvi.mx', role: 'Técnico', status: 'Inactivo', lastLogin: '10/03/2026', cameras: 1 },
-  { id: 5, name: 'Soto Beltrán, Miguel', email: 'msoto@smvi.mx', role: 'Técnico', status: 'Activo', lastLogin: 'Ayer 11:30', cameras: 3 },
-];
-
 const roleColors: Record<string, string> = {
   Administrador: '#FF3B3B',
   Operador: '#1E90FF',
   Técnico: '#F59E0B',
 };
 
+interface User {
+  id_usuario: number;
+  nombre: string;
+  correo: string;
+  activo: boolean;
+  fecha_creacion: string;
+  rol_nombre: string;
+}
+
+interface Role {
+  id_rol: number;
+  nombre: string;
+}
+
 export function Usuarios() {
-  const { setActiveCameraName } = useAppContext();
+  const { setActiveCameraName, token } = useAppContext();
   const [search, setSearch] = useState('');
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
-  const [users, setUsers] = useState(usersData);
+  const [users, setUsers] = useState<User[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [formData, setFormData] = useState({
+    nombre: '',
+    correo: '',
+    password: '',
+    id_rol: 0
+  });
 
-  useEffect(() => { setActiveCameraName('Gestión de Usuarios — SMVI'); }, []);
+  useEffect(() => {
+    setActiveCameraName('Gestión de Usuarios — SMVI');
+    fetchUsers();
+    fetchRoles();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(`http://localhost:8000/usuarios?token=${token}`);
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchRoles = async () => {
+    try {
+      const response = await fetch(`http://localhost:8000/roles?token=${token}`);
+      if (response.ok) {
+        const data = await response.json();
+        setRoles(data);
+      }
+    } catch (error) {
+      console.error('Error fetching roles:', error);
+    }
+  };
 
   const filtered = users.filter((u) =>
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
+    u.nombre.toLowerCase().includes(search.toLowerCase()) ||
+    u.correo.toLowerCase().includes(search.toLowerCase())
   );
 
-  const deleteUser = (id: number) => {
-    if (window.confirm('¿Eliminar usuario?')) {
-      setUsers((prev) => prev.filter((u) => u.id !== id));
+  if (loading) {
+    return <div style={{ color: '#E2EAF0', padding: '20px' }}>Cargando usuarios...</div>;
+  }
+
+  const handleCreateUser = async () => {
+    try {
+      const response = await fetch(`http://localhost:8000/usuarios?token=${token}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      if (response.ok) {
+        alert('Usuario creado exitosamente');
+        setShowModal(false);
+        setFormData({ nombre: '', correo: '', password: '', id_rol: 0 });
+        fetchUsers();
+      } else {
+        const error = await response.json();
+        alert(error.detail || 'Error al crear usuario');
+      }
+    } catch (error) {
+      console.error('Error creating user:', error);
+      alert('Error al crear usuario');
     }
+  };
+
+  const handleUpdateUser = async () => {
+    if (!editingUser) return;
+    try {
+      const updateData: any = {};
+      if (formData.nombre) updateData.nombre = formData.nombre;
+      if (formData.correo) updateData.correo = formData.correo;
+      if (formData.id_rol) updateData.id_rol = formData.id_rol;
+
+      const response = await fetch(`http://localhost:8000/usuarios/${editingUser.id_usuario}?token=${token}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      });
+      if (response.ok) {
+        alert('Usuario actualizado exitosamente');
+        setShowModal(false);
+        setEditingUser(null);
+        setFormData({ nombre: '', correo: '', password: '', id_rol: 0 });
+        fetchUsers();
+      } else {
+        const error = await response.json();
+        alert(error.detail || 'Error al actualizar usuario');
+      }
+    } catch (error) {
+      console.error('Error updating user:', error);
+      alert('Error al actualizar usuario');
+    }
+  };
+
+  const handleDeleteUser = async (id: number) => {
+    if (!window.confirm('¿Eliminar usuario?')) return;
+    try {
+      const response = await fetch(`http://localhost:8000/usuarios/${id}?token=${token}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        alert('Usuario eliminado exitosamente');
+        fetchUsers();
+      } else {
+        const error = await response.json();
+        alert(error.detail || 'Error al eliminar usuario');
+      }
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      alert('Error al eliminar usuario');
+    }
+  };
+
+  const openEditModal = (user: User) => {
+    setEditingUser(user);
+    setFormData({
+      nombre: user.nombre,
+      correo: user.correo,
+      password: '',
+      id_rol: roles.find(r => r.nombre === user.rol_nombre)?.id_rol || 0
+    });
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingUser(null);
+    setFormData({ nombre: '', correo: '', password: '', id_rol: 0 });
   };
 
   return (
@@ -55,9 +185,9 @@ export function Usuarios() {
       {/* Stats */}
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
         <MiniCard label="Total usuarios" value={String(users.length)} color="#1E90FF" icon={<Users size={16} style={{ color: '#1E90FF' }} />} />
-        <MiniCard label="Activos" value={String(users.filter((u) => u.status === 'Activo').length)} color="#22C55E" icon={<User size={16} style={{ color: '#22C55E' }} />} />
-        <MiniCard label="Administradores" value={String(users.filter((u) => u.role === 'Administrador').length)} color="#FF3B3B" icon={<Shield size={16} style={{ color: '#FF3B3B' }} />} />
-        <MiniCard label="Sesiones hoy" value="4" color="#F59E0B" icon={<User size={16} style={{ color: '#F59E0B' }} />} />
+        <MiniCard label="Activos" value={String(users.filter((u) => u.activo).length)} color="#22C55E" icon={<User size={16} style={{ color: '#22C55E' }} />} />
+        <MiniCard label="Administradores" value={String(users.filter((u) => u.rol_nombre === 'Administrador').length)} color="#FF3B3B" icon={<Shield size={16} style={{ color: '#FF3B3B' }} />} />
+        <MiniCard label="Sesiones hoy" value="0" color="#F59E0B" icon={<User size={16} style={{ color: '#F59E0B' }} />} />
       </div>
 
       {/* Search + filters */}
@@ -99,46 +229,46 @@ export function Usuarios() {
           </thead>
           <tbody>
             {filtered.map((user, i) => (
-              <tr key={user.id} style={{ background: i % 2 === 0 ? '#111C2B' : '#1A2B3C', borderBottom: '1px solid rgba(38,61,82,0.4)' }}>
+              <tr key={user.id_usuario} style={{ background: i % 2 === 0 ? '#111C2B' : '#1A2B3C', borderBottom: '1px solid rgba(38,61,82,0.4)' }}>
                 <td style={{ padding: '12px 16px' }}>
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center rounded-full" style={{ width: 30, height: 30, background: `${roleColors[user.role]}20`, border: `1px solid ${roleColors[user.role]}40` }}>
-                      <User size={13} style={{ color: roleColors[user.role] }} />
+                    <div className="flex items-center justify-center rounded-full" style={{ width: 30, height: 30, background: `${roleColors[user.rol_nombre]}20`, border: `1px solid ${roleColors[user.rol_nombre]}40` }}>
+                      <User size={13} style={{ color: roleColors[user.rol_nombre] }} />
                     </div>
-                    <span style={{ fontSize: 13, color: '#E2EAF0', fontWeight: 500 }}>{user.name}</span>
+                    <span style={{ fontSize: 13, color: '#E2EAF0', fontWeight: 500 }}>{user.nombre}</span>
                   </div>
                 </td>
-                <td style={{ padding: '12px 16px', fontSize: 12, color: '#8899AA' }}>{user.email}</td>
+                <td style={{ padding: '12px 16px', fontSize: 12, color: '#8899AA' }}>{user.correo}</td>
                 <td style={{ padding: '12px 16px' }}>
-                  <span className="flex items-center gap-1 rounded-full px-2 py-0.5 w-fit" style={{ fontSize: 11, background: `${roleColors[user.role]}20`, border: `1px solid ${roleColors[user.role]}40`, color: roleColors[user.role], fontWeight: 600 }}>
+                  <span className="flex items-center gap-1 rounded-full px-2 py-0.5 w-fit" style={{ fontSize: 11, background: `${roleColors[user.rol_nombre]}20`, border: `1px solid ${roleColors[user.rol_nombre]}40`, color: roleColors[user.rol_nombre], fontWeight: 600 }}>
                     <Shield size={9} />
-                    {user.role}
+                    {user.rol_nombre}
                   </span>
                 </td>
                 <td style={{ padding: '12px 16px' }}>
                   <div className="flex items-center gap-1">
                     {Array.from({ length: 3 }).map((_, ci) => (
-                      <div key={ci} style={{ width: 8, height: 8, borderRadius: 2, background: ci < user.cameras ? '#1E90FF' : '#263D52' }} />
+                      <div key={ci} style={{ width: 8, height: 8, borderRadius: 2, background: ci < 3 ? '#1E90FF' : '#263D52' }} />
                     ))}
-                    <span style={{ fontSize: 11, color: '#6B7280', marginLeft: 4 }}>{user.cameras}/3</span>
+                    <span style={{ fontSize: 11, color: '#6B7280', marginLeft: 4 }}>3/3</span>
                   </div>
                 </td>
-                <td style={{ padding: '12px 16px', fontSize: 12, color: '#8899AA', fontFamily: 'monospace' }}>{user.lastLogin}</td>
+                <td style={{ padding: '12px 16px', fontSize: 12, color: '#8899AA', fontFamily: 'monospace' }}>{new Date(user.fecha_creacion).toLocaleDateString()}</td>
                 <td style={{ padding: '12px 16px' }}>
                   <span className="rounded-full px-2 py-0.5" style={{
                     fontSize: 11,
                     fontWeight: 600,
-                    background: user.status === 'Activo' ? 'rgba(34,197,94,0.12)' : 'rgba(107,114,128,0.2)',
-                    color: user.status === 'Activo' ? '#22C55E' : '#6B7280',
-                    border: `1px solid ${user.status === 'Activo' ? 'rgba(34,197,94,0.3)' : 'rgba(107,114,128,0.3)'}`,
+                    background: user.activo ? 'rgba(34,197,94,0.12)' : 'rgba(107,114,128,0.2)',
+                    color: user.activo ? '#22C55E' : '#6B7280',
+                    border: `1px solid ${user.activo ? 'rgba(34,197,94,0.3)' : 'rgba(107,114,128,0.3)'}`,
                   }}>
-                    {user.status}
+                    {user.activo ? 'Activo' : 'Inactivo'}
                   </span>
                 </td>
                 <td style={{ padding: '12px 16px' }}>
                   <div className="flex items-center gap-2">
-                    <ActionBtn icon={<Pencil size={12} />} color="#1E90FF" title="Editar" />
-                    <ActionBtn icon={<Trash2 size={12} />} color="#FF3B3B" title="Eliminar" onClick={() => deleteUser(user.id)} />
+                    <ActionBtn icon={<Pencil size={12} />} color="#1E90FF" title="Editar" onClick={() => openEditModal(user)} />
+                    <ActionBtn icon={<Trash2 size={12} />} color="#FF3B3B" title="Eliminar" onClick={() => handleDeleteUser(user.id_usuario)} />
                   </div>
                 </td>
               </tr>
@@ -152,41 +282,77 @@ export function Usuarios() {
 
       {showModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'rgba(0,0,0,0.7)' }}
-          onClick={() => setShowModal(false)}>
+          onClick={closeModal}>
           <div className="rounded-xl p-6 w-full max-w-md" style={{ background: '#1A2B3C', border: '1px solid #263D52' }}
             onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#FFFFFF', marginBottom: 20 }}>Nuevo usuario</h3>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#FFFFFF', marginBottom: 20 }}>
+              {editingUser ? 'Editar usuario' : 'Nuevo usuario'}
+            </h3>
             <div className="flex flex-col gap-4">
-              {[
-                { label: 'Nombre completo', placeholder: 'Apellido, Nombre', type: 'text', key: 'nu1' },
-                { label: 'Correo electrónico', placeholder: 'usuario@smvi.mx', type: 'email', key: 'nu2' },
-                { label: 'Contraseña temporal', placeholder: '••••••••', type: 'password', key: 'nu3' },
-              ].map((f) => (
-                <div key={f.key} className="flex flex-col gap-1.5">
-                  <label style={{ fontSize: 12, color: '#A0AEC0', fontWeight: 500 }}>{f.label}</label>
-                  <input type={f.type} placeholder={f.placeholder}
-                    onFocus={() => setFocusedInput(f.key)} onBlur={() => setFocusedInput(null)}
-                    style={{ background: '#0D1B2A', border: `1px solid ${focusedInput === f.key ? '#1E90FF' : '#263D52'}`, borderRadius: 8, padding: '9px 12px', color: '#FFFFFF', fontSize: 13, outline: 'none' }} />
+              <div className="flex flex-col gap-1.5">
+                <label style={{ fontSize: 12, color: '#A0AEC0', fontWeight: 500 }}>Nombre completo</label>
+                <input
+                  type="text"
+                  value={formData.nombre}
+                  onChange={(e) => setFormData(prev => ({ ...prev, nombre: e.target.value }))}
+                  placeholder="Apellido, Nombre"
+                  onFocus={() => setFocusedInput('nombre')}
+                  onBlur={() => setFocusedInput(null)}
+                  style={{ background: '#0D1B2A', border: `1px solid ${focusedInput === 'nombre' ? '#1E90FF' : '#263D52'}`, borderRadius: 8, padding: '9px 12px', color: '#FFFFFF', fontSize: 13, outline: 'none' }}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label style={{ fontSize: 12, color: '#A0AEC0', fontWeight: 500 }}>Correo electrónico</label>
+                <input
+                  type="email"
+                  value={formData.correo}
+                  onChange={(e) => setFormData(prev => ({ ...prev, correo: e.target.value }))}
+                  placeholder="usuario@smvi.mx"
+                  onFocus={() => setFocusedInput('correo')}
+                  onBlur={() => setFocusedInput(null)}
+                  style={{ background: '#0D1B2A', border: `1px solid ${focusedInput === 'correo' ? '#1E90FF' : '#263D52'}`, borderRadius: 8, padding: '9px 12px', color: '#FFFFFF', fontSize: 13, outline: 'none' }}
+                />
+              </div>
+              {!editingUser && (
+                <div className="flex flex-col gap-1.5">
+                  <label style={{ fontSize: 12, color: '#A0AEC0', fontWeight: 500 }}>Contraseña temporal</label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="••••••••"
+                    onFocus={() => setFocusedInput('password')}
+                    onBlur={() => setFocusedInput(null)}
+                    style={{ background: '#0D1B2A', border: `1px solid ${focusedInput === 'password' ? '#1E90FF' : '#263D52'}`, borderRadius: 8, padding: '9px 12px', color: '#FFFFFF', fontSize: 13, outline: 'none' }}
+                  />
                 </div>
-              ))}
+              )}
               <div className="flex flex-col gap-1.5">
                 <label style={{ fontSize: 12, color: '#A0AEC0', fontWeight: 500 }}>Rol</label>
                 <div className="relative">
-                  <select style={{ width: '100%', background: '#0D1B2A', border: '1px solid #263D52', borderRadius: 8, padding: '9px 32px 9px 12px', color: '#E2EAF0', fontSize: 13, outline: 'none', appearance: 'none', cursor: 'pointer' }}>
-                    <option>Operador</option>
-                    <option>Técnico</option>
-                    <option>Administrador</option>
+                  <select
+                    value={formData.id_rol}
+                    onChange={(e) => setFormData(prev => ({ ...prev, id_rol: parseInt(e.target.value) }))}
+                    style={{ width: '100%', background: '#0D1B2A', border: '1px solid #263D52', borderRadius: 8, padding: '9px 32px 9px 12px', color: '#E2EAF0', fontSize: 13, outline: 'none', appearance: 'none', cursor: 'pointer' }}
+                  >
+                    <option value={0} disabled>Seleccionar rol</option>
+                    {roles.map(role => (
+                      <option key={role.id_rol} value={role.id_rol}>{role.nombre}</option>
+                    ))}
                   </select>
                   <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#6B7280' }} />
                 </div>
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowModal(false)} style={{ flex: 1, background: 'transparent', border: '1px solid #263D52', borderRadius: 8, padding: '10px', color: '#6B7280', fontSize: 13, cursor: 'pointer' }}>
+              <button onClick={closeModal} style={{ flex: 1, background: 'transparent', border: '1px solid #263D52', borderRadius: 8, padding: '10px', color: '#6B7280', fontSize: 13, cursor: 'pointer' }}>
                 Cancelar
               </button>
-              <button onClick={() => setShowModal(false)} style={{ flex: 1, background: '#1E90FF', border: 'none', borderRadius: 8, padding: '10px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-                Crear usuario
+              <button
+                onClick={editingUser ? handleUpdateUser : handleCreateUser}
+                style={{ flex: 1, background: '#1E90FF', border: 'none', borderRadius: 8, padding: '10px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+              >
+                {editingUser ? 'Actualizar usuario' : 'Crear usuario'}
               </button>
             </div>
           </div>
