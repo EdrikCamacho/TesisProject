@@ -9,6 +9,7 @@ interface AppContextType {
   usuario: any;
   token: string;
   logout: () => void;
+  isAdmin: boolean;
 }
 
 const AppContext = createContext<AppContextType>({
@@ -20,6 +21,7 @@ const AppContext = createContext<AppContextType>({
   usuario: null,
   token: '',
   logout: () => {},
+  isAdmin: false,
 });
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -35,6 +37,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     ? { name: usuario.nombre, role: usuario.rol }
     : { name: 'Operador García', role: 'Operador' };
 
+  const isAdmin = usuario?.id_rol === 1;
+
   const logout = () => {
     localStorage.removeItem('usuario');
     localStorage.removeItem('token');
@@ -43,7 +47,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AppContext.Provider value={{ sidebarExpanded, setSidebarExpanded, activeCameraName, setActiveCameraName, currentUser, usuario, token, logout }}>
+    <AppContext.Provider value={{ sidebarExpanded, setSidebarExpanded, activeCameraName, setActiveCameraName, currentUser, usuario, token, logout, isAdmin }}>
       {children}
     </AppContext.Provider>
   );

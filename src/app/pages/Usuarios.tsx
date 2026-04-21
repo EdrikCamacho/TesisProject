@@ -36,8 +36,16 @@ export function Usuarios() {
     nombre: '',
     correo: '',
     password: '',
+    confirmPassword: '',
     id_rol: 0
   });
+  const [formErrors, setFormErrors] = useState({
+    nombre: '',
+    correo: '',
+    password: '',
+    id_rol: ''
+  });
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState('Todos los roles');
 
   useEffect(() => {
     setActiveCameraName('Gestión de Usuarios — SMVI');
@@ -71,16 +79,52 @@ export function Usuarios() {
     }
   };
 
-  const filtered = users.filter((u) =>
-    u.nombre.toLowerCase().includes(search.toLowerCase()) ||
-    u.correo.toLowerCase().includes(search.toLowerCase())
-  );
+  const validateForm = () => {
+    const errors = {
+      nombre: '',
+      correo: '',
+      password: '',
+      id_rol: ''
+    };
+
+    if (!formData.nombre.trim()) {
+      errors.nombre = 'El nombre es obligatorio';
+    }
+
+    if (!formData.correo.trim()) {
+      errors.correo = 'El correo electrónico es obligatorio';
+    } else if (!formData.correo.includes('@')) {
+      errors.correo = 'El correo electrónico debe contener un @';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.correo)) {
+      errors.correo = 'El correo electrónico debe tener un formato válido';
+    }
+
+    if (!editingUser && !formData.password.trim()) {
+      errors.password = 'La contraseña es obligatoria';
+    }
+
+    if (formData.id_rol === 0) {
+      errors.id_rol = 'Debe seleccionar un rol';
+    }
+
+    setFormErrors(errors);
+    return !Object.values(errors).some(error => error !== '');
+  };
+
+  const filtered = users.filter((u) => {
+    const matchesSearch = u.nombre.toLowerCase().includes(search.toLowerCase()) ||
+                         u.correo.toLowerCase().includes(search.toLowerCase());
+    const matchesRole = selectedRoleFilter === 'Todos los roles' || u.rol_nombre === selectedRoleFilter;
+    return matchesSearch && matchesRole;
+  });
 
   if (loading) {
     return <div style={{ color: '#E2EAF0', padding: '20px' }}>Cargando usuarios...</div>;
   }
 
   const handleCreateUser = async () => {
+    if (!validateForm()) return;
+
     try {
       const response = await fetch(`http://localhost:8000/usuarios?token=${token}`, {
         method: 'POST',
@@ -90,7 +134,8 @@ export function Usuarios() {
       if (response.ok) {
         alert('Usuario creado exitosamente');
         setShowModal(false);
-        setFormData({ nombre: '', correo: '', password: '', id_rol: 0 });
+        setFormData({ nombre: '', correo: '', password: '', confirmPassword: '', id_rol: 0 });
+        setFormErrors({ nombre: '', correo: '', password: '', id_rol: '' });
         fetchUsers();
       } else {
         const error = await response.json();
@@ -104,11 +149,36 @@ export function Usuarios() {
 
   const handleUpdateUser = async () => {
     if (!editingUser) return;
+
+    // Validate only required fields for update
+    const errors = {
+      nombre: '',
+      correo: '',
+      password: '',
+      id_rol: ''
+    };
+
+    if (formData.nombre.trim() && !formData.nombre.trim()) {
+      errors.nombre = 'El nombre no puede estar vacío';
+    }
+
+    if (formData.correo.trim()) {
+      if (!formData.correo.includes('@')) {
+        errors.correo = 'El correo electrónico debe contener un @';
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.correo)) {
+        errors.correo = 'El correo electrónico debe tener un formato válido';
+      }
+    }
+
+    setFormErrors(errors);
+    if (Object.values(errors).some(error => error !== '')) return;
+
     try {
       const updateData: any = {};
-      if (formData.nombre) updateData.nombre = formData.nombre;
-      if (formData.correo) updateData.correo = formData.correo;
-      if (formData.id_rol) updateData.id_rol = formData.id_rol;
+      if (formData.nombre.trim()) updateData.nombre = formData.nombre;
+      if (formData.correo.trim()) updateData.correo = formData.correo;
+      if (formData.password.trim()) updateData.password = formData.password;
+      if (formData.id_rol > 0) updateData.id_rol = formData.id_rol;
 
       const response = await fetch(`http://localhost:8000/usuarios/${editingUser.id_usuario}?token=${token}`, {
         method: 'PUT',
@@ -119,7 +189,8 @@ export function Usuarios() {
         alert('Usuario actualizado exitosamente');
         setShowModal(false);
         setEditingUser(null);
-        setFormData({ nombre: '', correo: '', password: '', id_rol: 0 });
+        setFormData({ nombre: '', correo: '', password: '', confirmPassword: '', id_rol: 0 });
+        setFormErrors({ nombre: '', correo: '', password: '', id_rol: '' });
         fetchUsers();
       } else {
         const error = await response.json();
@@ -156,6 +227,7 @@ export function Usuarios() {
       nombre: user.nombre,
       correo: user.correo,
       password: '',
+      confirmPassword: '',
       id_rol: roles.find(r => r.nombre === user.rol_nombre)?.id_rol || 0
     });
     setShowModal(true);
@@ -164,7 +236,7 @@ export function Usuarios() {
   const closeModal = () => {
     setShowModal(false);
     setEditingUser(null);
-    setFormData({ nombre: '', correo: '', password: '', id_rol: 0 });
+    setFormData({ nombre: '', correo: '', password: '', confirmPassword: '', id_rol: 0 });
   };
 
   return (
@@ -205,7 +277,11 @@ export function Usuarios() {
           />
         </div>
         <div className="relative">
-          <select style={{ background: '#1A2B3C', border: '1px solid #263D52', borderRadius: 8, padding: '8px 32px 8px 12px', color: '#E2EAF0', fontSize: 13, outline: 'none', appearance: 'none', cursor: 'pointer' }}>
+          <select
+            value={selectedRoleFilter}
+            onChange={(e) => setSelectedRoleFilter(e.target.value)}
+            style={{ background: '#1A2B3C', border: '1px solid #263D52', borderRadius: 8, padding: '8px 32px 8px 12px', color: '#E2EAF0', fontSize: 13, outline: 'none', appearance: 'none', cursor: 'pointer' }}
+          >
             <option>Todos los roles</option>
             <option>Administrador</option>
             <option>Operador</option>
@@ -298,8 +374,9 @@ export function Usuarios() {
                   placeholder="Apellido, Nombre"
                   onFocus={() => setFocusedInput('nombre')}
                   onBlur={() => setFocusedInput(null)}
-                  style={{ background: '#0D1B2A', border: `1px solid ${focusedInput === 'nombre' ? '#1E90FF' : '#263D52'}`, borderRadius: 8, padding: '9px 12px', color: '#FFFFFF', fontSize: 13, outline: 'none' }}
+                  style={{ background: '#0D1B2A', border: `1px solid ${formErrors.nombre ? '#FF3B3B' : focusedInput === 'nombre' ? '#1E90FF' : '#263D52'}`, borderRadius: 8, padding: '9px 12px', color: '#FFFFFF', fontSize: 13, outline: 'none' }}
                 />
+                {formErrors.nombre && <span style={{ fontSize: 11, color: '#FF3B3B' }}>{formErrors.nombre}</span>}
               </div>
               <div className="flex flex-col gap-1.5">
                 <label style={{ fontSize: 12, color: '#A0AEC0', fontWeight: 500 }}>Correo electrónico</label>
@@ -310,9 +387,24 @@ export function Usuarios() {
                   placeholder="usuario@smvi.mx"
                   onFocus={() => setFocusedInput('correo')}
                   onBlur={() => setFocusedInput(null)}
-                  style={{ background: '#0D1B2A', border: `1px solid ${focusedInput === 'correo' ? '#1E90FF' : '#263D52'}`, borderRadius: 8, padding: '9px 12px', color: '#FFFFFF', fontSize: 13, outline: 'none' }}
+                  style={{ background: '#0D1B2A', border: `1px solid ${formErrors.correo ? '#FF3B3B' : focusedInput === 'correo' ? '#1E90FF' : '#263D52'}`, borderRadius: 8, padding: '9px 12px', color: '#FFFFFF', fontSize: 13, outline: 'none' }}
                 />
+                {formErrors.correo && <span style={{ fontSize: 11, color: '#FF3B3B' }}>{formErrors.correo}</span>}
               </div>
+              {editingUser && (
+                <div className="flex flex-col gap-1.5">
+                  <label style={{ fontSize: 12, color: '#A0AEC0', fontWeight: 500 }}>Nueva contraseña (opcional)</label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="••••••••"
+                    onFocus={() => setFocusedInput('password')}
+                    onBlur={() => setFocusedInput(null)}
+                    style={{ background: '#0D1B2A', border: `1px solid ${focusedInput === 'password' ? '#1E90FF' : '#263D52'}`, borderRadius: 8, padding: '9px 12px', color: '#FFFFFF', fontSize: 13, outline: 'none' }}
+                  />
+                </div>
+              )}
               {!editingUser && (
                 <div className="flex flex-col gap-1.5">
                   <label style={{ fontSize: 12, color: '#A0AEC0', fontWeight: 500 }}>Contraseña temporal</label>

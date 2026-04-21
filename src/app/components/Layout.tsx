@@ -5,16 +5,16 @@ import {
 } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
 
-const navItems = [
-  { label: 'Dashboard en Vivo', icon: LayoutDashboard, path: '/app' },
-  { label: 'Alertas', icon: Bell, path: '/app/alertas' },
-  { label: 'Reportes', icon: FileBarChart2, path: '/app/reportes' },
-  { label: 'Configuración', icon: Settings, path: '/app/configuracion' },
-  { label: 'Usuarios', icon: Users, path: '/app/usuarios' },
-];
-
 export function Layout() {
-  const { sidebarExpanded, setSidebarExpanded, activeCameraName, currentUser } = useAppContext();
+  const { sidebarExpanded, setSidebarExpanded, activeCameraName, currentUser, isAdmin } = useAppContext();
+
+  const navItems = [
+    { label: 'Dashboard en Vivo', icon: LayoutDashboard, path: '/app' },
+    { label: 'Alertas', icon: Bell, path: '/app/alertas' },
+    { label: 'Reportes', icon: FileBarChart2, path: '/app/reportes' },
+    { label: 'Configuración', icon: Settings, path: '/app/configuracion' },
+    ...(isAdmin ? [{ label: 'Usuarios', icon: Users, path: '/app/usuarios' }] : []),
+  ];
   const navigate = useNavigate();
   const location = useLocation();
 

@@ -6,7 +6,7 @@ import { Alertas } from './pages/Alertas';
 import { Reportes } from './pages/Reportes';
 import { Configuracion } from './pages/Configuracion';
 import { Usuarios } from './pages/Usuarios';
-import { AppProvider } from './context/AppContext';
+import { AppProvider, useAppContext } from './context/AppContext';
 import { Navigate } from "react-router";
 import { JSX } from 'react/jsx-runtime';
 
@@ -19,6 +19,17 @@ function ProtectedRoute({ children }: { children: JSX.Element }) {
 
   return children;
 }
+
+function AdminRoute({ children }: { children: JSX.Element }) {
+  const { isAdmin } = useAppContext();
+
+  if (!isAdmin) {
+    return <Navigate to="/app" replace />;
+  }
+
+  return children;
+}
+
 function AppLayout() {
   return (
     <AppProvider>
@@ -46,7 +57,7 @@ export const router = createBrowserRouter([
       { path: 'alertas', element: <Alertas /> },
       { path: 'reportes', element: <Reportes /> },
       { path: 'configuracion', element: <Configuracion /> },
-      { path: 'usuarios', element: <Usuarios /> },
+      { path: 'usuarios', element: <AdminRoute><Usuarios /></AdminRoute> },
     ],
   },
 ]);

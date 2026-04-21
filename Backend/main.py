@@ -1,10 +1,11 @@
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 import mysql.connector
 from mysql.connector import Error
 import uuid
 from datetime import datetime, timedelta
+import re
 
 app = FastAPI()
 
@@ -34,11 +35,24 @@ class CreateUserRequest(BaseModel):
     password: str
     id_rol: int
 
+    @validator('correo')
+    def validate_email(cls, v):
+        if not re.match(r'^[^@]+@[^@]+\.[^@]+$', v):
+            raise ValueError('El correo electrónico debe contener un @ y un dominio válido')
+        return v
+
 class UpdateUserRequest(BaseModel):
     nombre: str | None = None
     correo: str | None = None
+    password: str | None = None
     activo: bool | None = None
     id_rol: int | None = None
+
+    @validator('correo')
+    def validate_email(cls, v):
+        if v is not None and not re.match(r'^[^@]+@[^@]+\.[^@]+$', v):
+            raise ValueError('El correo electrónico debe contener un @ y un dominio válido')
+        return v
 
 def verify_session(token: str):
     connection = None
@@ -164,6 +178,9 @@ def update_usuario(id_usuario: int, user: UpdateUserRequest, token: str = Depend
         if user.correo is not None:
             update_fields.append("correo = %s")
             values.append(user.correo)
+        if user.password is not None:
+            update_fields.append("contraseña_hash = %s")
+            values.append(user.password)
         if user.activo is not None:
             update_fields.append("activo = %s")
             values.append(user.activo)
@@ -273,7 +290,7 @@ def login(credentials: LoginRequest, request: Request):
 
         # Consulta ajustada a tu tabla 'usuario' y unión con 'rol'
         query = """
-            SELECT u.id_usuario, u.nombre, u.correo, u.contraseña_hash, r.nombre as rol_nombre
+            SELECT u.id_usuario, u.nombre, u.correo, u.contraseña_hash, r.nombre as rol_nombre, r.id_rol
             FROM usuario u
             JOIN rol r ON u.id_rol = r.id_rol
             WHERE u.correo = %s AND u.activo = TRUE
@@ -301,7 +318,8 @@ def login(credentials: LoginRequest, request: Request):
                 "user": {
                     "id": user['id_usuario'],
                     "nombre": user['nombre'],
-                    "rol": user['rol_nombre']
+                    "rol": user['rol_nombre'],
+                    "id_rol": user['id_rol']
                 },
                 "token": token
             }
