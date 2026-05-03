@@ -21,7 +21,7 @@ app.add_middleware(
 db_config = {
     "host": "localhost",
     "user": "root",
-    "password": "root",
+    "password": "1234",
     "database": "monitoreo_vial"
 }
 

@@ -1,12 +1,19 @@
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useAppContext } from '../context/AppContext';
-import { FileText, Download, Calendar, ChevronDown, Car, PersonStanding, BarChart3, TriangleAlert } from 'lucide-react';
+import {
+  FileText, Download, Calendar, ChevronDown,
+  Car, PersonStanding, BarChart3, TriangleAlert, Loader2
+} from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   LineChart, Line,
   PieChart, Pie, Cell, ResponsiveContainer
 } from 'recharts';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
+// ─── datos ────────────────────────────────────────────────────────────────────
 
 const barData = [
   { dia: 'Lun', vehiculos: 1205, peatones: 321 },
@@ -15,27 +22,27 @@ const barData = [
   { dia: 'Jue', vehiculos: 1687, peatones: 421 },
   { dia: 'Vie', vehiculos: 1543, peatones: 389 },
   { dia: 'Sáb', vehiculos: 1421, peatones: 362 },
-  { dia: 'Dom', vehiculos: 826, peatones: 211 },
+  { dia: 'Dom', vehiculos: 826,  peatones: 211 },
 ];
 
 const pieData = [
-  { name: 'Automóviles', value: 62, color: '#1E90FF' },
-  { name: 'Camiones', value: 18, color: '#F59E0B' },
-  { name: 'Autobuses', value: 12, color: '#22C55E' },
-  { name: 'Motocicletas', value: 8, color: '#A855F7' },
+  { name: 'Automóviles',  value: 62, color: '#1E90FF' },
+  { name: 'Camiones',     value: 18, color: '#F59E0B' },
+  { name: 'Autobuses',    value: 12, color: '#22C55E' },
+  { name: 'Motocicletas', value: 8,  color: '#A855F7' },
 ];
 
 const hourlyData = Array.from({ length: 24 }, (_, h) => {
   let base = 20;
-  if (h >= 7 && h <= 9) base = 80 + (h === 8 ? 120 : 90);
+  if (h >= 7 && h <= 9)   base = 80 + (h === 8 ? 120 : 90);
   else if (h >= 11 && h <= 14) base = 65 + Math.random() * 20;
   else if (h >= 17 && h <= 19) base = 90 + (h === 18 ? 110 : 85);
-  else if (h >= 22 || h <= 5) base = 10 + Math.random() * 10;
+  else if (h >= 22 || h <= 5)  base = 10 + Math.random() * 10;
   else base = 35 + Math.random() * 20;
   return {
     hora: `${String(h).padStart(2, '0')}:00`,
     vehiculos: Math.round(base),
-    peatones: Math.round(base * 0.28),
+    peatones:  Math.round(base * 0.28),
   };
 });
 
@@ -47,8 +54,10 @@ const tableData = [
   { fecha: '11/03/2026', camara: 'CAM 01', horaPico: '18:10', maxVeh: 193, anomalias: 4 },
 ];
 
+// ─── tooltip personalizado ────────────────────────────────────────────────────
+
 const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
+  if (active && payload?.length) {
     return (
       <div style={{ background: '#1A2B3C', border: '1px solid #263D52', borderRadius: 8, padding: '10px 14px' }}>
         <p style={{ color: '#8899AA', fontSize: 11, marginBottom: 6 }}>{label}</p>
@@ -76,12 +85,233 @@ const CustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }: an
   );
 };
 
+// ─── componente principal ─────────────────────────────────────────────────────
+
 export function Reportes() {
   const { setActiveCameraName } = useAppContext();
+
+  // ref al contenedor que se va a capturar
+  const reportRef = useRef<HTMLDivElement>(null);
+
+  // estado para el spinner del botón mientras genera el PDF
+  const [exportingPdf, setExportingPdf] = useState(false);
+
   useEffect(() => { setActiveCameraName('Panel de Reportes — SMVI'); }, []);
 
+  // ── función de exportación ──────────────────────────────────────────────────
+  const handleExportPDF = async () => {
+    if (!reportRef.current) return;
+    setExportingPdf(true);
+
+    try {
+      // 1. Captura el DOM como canvas (escala 2 = resolución doble, más nítido en pantallas HD)
+      const canvas = await html2canvas(reportRef.current, {
+        scale: 2,
+        useCORS: true,          // necesario si hay imágenes externas (logos, etc.)
+        backgroundColor: '#0D1B2A', // el fondo oscuro de tu app
+        logging: false,
+      });
+
+      // 2. Dimensiones del canvas capturado
+      const imgWidth  = canvas.width;
+      const imgHeight = canvas.height;
+
+      // 3. Crear PDF en formato A4 landscape para aprovechar el ancho del dashboard
+      //    Unidades en 'mm'. A4 landscape = 297 x 210 mm
+      const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+      const pageW  = pdf.internal.pageSize.getWidth();   // 297 mm
+      const pageH  = pdf.internal.pageSize.getHeight();  // 210 mm
+
+      // 4. Encabezado de texto en la primera página
+      const now = new Date();
+      const fechaStr = now.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' });
+      const horaStr  = now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+
+      pdf.setFillColor(13, 27, 42);          // mismo fondo oscuro
+      pdf.rect(0, 0, pageW, pageH, 'F');     // fondo de página
+
+      pdf.setFontSize(14);
+      pdf.setTextColor(226, 234, 240);       // #E2EAF0
+      pdf.text('Reporte SMVI — Análisis Histórico', 10, 12);
+
+      pdf.setFontSize(8);
+      pdf.setTextColor(107, 114, 128);       // #6B7280
+      pdf.text(`Generado el ${fechaStr} a las ${horaStr}`, 10, 18);
+
+      // línea separadora
+      pdf.setDrawColor(38, 61, 82);          // #263D52
+      pdf.line(10, 20, pageW - 10, 20);
+
+      // 5. Calcular cuántos mm de alto ocupa la imagen en la página
+      //    (manteniendo proporción, ajustando al ancho disponible)
+      const marginTop    = 22;   // mm — espacio que ocupa el encabezado
+      const marginSides  = 10;   // mm a cada lado
+      const availableW   = pageW - marginSides * 2;          // mm
+      const ratio        = imgHeight / imgWidth;
+      const renderedH    = availableW * ratio;               // mm — alto total de la imagen
+
+      // 6. Dividir en páginas si la imagen es más alta que la página
+      const availablePageH = pageH - marginTop;              // alto útil primera página
+      const fullPageH      = pageH - 10;                     // alto útil páginas siguientes (solo margen inferior)
+
+      // Convierte mm a px del canvas para saber qué slice mostrar en cada página
+      const mmToPx = imgWidth / availableW;  // px por mm
+
+      let yRendered = 0;     // cuántos mm de imagen ya pusimos
+
+      // Primera página: usa el espacio debajo del encabezado
+      const firstSliceH = Math.min(availablePageH, renderedH);
+      const firstSlicePx = firstSliceH * mmToPx;
+
+      // Crear canvas recortado para este slice
+      const addSlice = (sliceStartPx: number, sliceHeightPx: number, yOnPage: number) => {
+        const sliceCanvas = document.createElement('canvas');
+        sliceCanvas.width  = imgWidth;
+        sliceCanvas.height = Math.ceil(sliceHeightPx);
+        const ctx = sliceCanvas.getContext('2d')!;
+        ctx.drawImage(canvas, 0, -sliceStartPx);
+        const imgData = sliceCanvas.toDataURL('image/jpeg', 0.95);
+        const sliceH  = sliceHeightPx / mmToPx;   // alto en mm
+        pdf.addImage(imgData, 'JPEG', marginSides, yOnPage, availableW, sliceH);
+      };
+
+      addSlice(0, firstSlicePx, marginTop);
+      yRendered += firstSliceH;
+
+      // Páginas adicionales
+      while (yRendered < renderedH - 1) {
+        pdf.addPage();
+        pdf.setFillColor(13, 27, 42);
+        pdf.rect(0, 0, pageW, pageH, 'F');
+
+        const remaining    = renderedH - yRendered;
+        const sliceH_mm    = Math.min(fullPageH, remaining);
+        const sliceStartPx = yRendered * mmToPx;
+        const sliceH_px    = sliceH_mm * mmToPx;
+
+        addSlice(sliceStartPx, sliceH_px, 5);
+        yRendered += sliceH_mm;
+      }
+
+      // 7. Número de página en el pie de cada página
+      const totalPages = pdf.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(7);
+        pdf.setTextColor(107, 114, 128);
+        pdf.text(`Página ${i} de ${totalPages}  |  SMVI — Sistema de Monitoreo Vial Inteligente`, pageW / 2, pageH - 3, { align: 'center' });
+      }
+
+      // 8. Descargar
+      pdf.save(`reporte-smvi-${now.toISOString().slice(0, 10)}.pdf`);
+
+    } catch (err) {
+      console.error('Error al exportar PDF:', err);
+      alert('Ocurrió un error al generar el PDF. Revisa la consola.');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  // ── Agregar junto a handleExportPDF ────────────────────────────────────────
+
+const handleExportCSV = () => {
+  // helper: envuelve cualquier valor en comillas y escapa comillas internas
+  const esc = (val: any) => `"${String(val).replace(/"/g, '""')}"`;
+
+  // helper: convierte un array de objetos a bloque CSV
+  // headers: [{ label: 'Fecha', key: 'fecha' }, ...]
+  const toBlock = (title: string, headers: { label: string; key: string }[], rows: Record<string, any>[]) => {
+    const headerLine = headers.map(h => esc(h.label)).join(',');
+    const dataLines  = rows.map(row =>
+      headers.map(h => esc(row[h.key])).join(',')
+    );
+    return [
+      esc(title),          // título de sección (una celda)
+      headerLine,          // fila de encabezados
+      ...dataLines,        // filas de datos
+      '',                  // línea vacía separadora
+    ].join('\n');
+  };
+
+  // ── sección 1: resumen por sesión ────────────────────────────────────────
+  const seccionSesiones = toBlock(
+    'Resumen por sesión de análisis',
+    [
+      { label: 'Fecha',           key: 'fecha'     },
+      { label: 'Cámara',          key: 'camara'    },
+      { label: 'Hora Pico',       key: 'horaPico'  },
+      { label: 'Máx. Vehículos',  key: 'maxVeh'    },
+      { label: 'Anomalías',       key: 'anomalias' },
+    ],
+    tableData
+  );
+
+  // ── sección 2: flujo diario ──────────────────────────────────────────────
+  const seccionDiaria = toBlock(
+    'Flujo diario — últimos 7 días',
+    [
+      { label: 'Día',       key: 'dia'       },
+      { label: 'Vehículos', key: 'vehiculos' },
+      { label: 'Peatones',  key: 'peatones'  },
+    ],
+    barData
+  );
+
+  // ── sección 3: tendencia horaria ─────────────────────────────────────────
+  const seccionHoraria = toBlock(
+    'Tendencia horaria promedio',
+    [
+      { label: 'Hora',      key: 'hora'      },
+      { label: 'Vehículos', key: 'vehiculos' },
+      { label: 'Peatones',  key: 'peatones'  },
+    ],
+    hourlyData
+  );
+
+  // ── sección 4: composición vehicular ────────────────────────────────────
+  const seccionComposicion = toBlock(
+    'Composición vehicular',
+    [
+      { label: 'Tipo',        key: 'name'  },
+      { label: 'Porcentaje',  key: 'value' },
+    ],
+    pieData
+  );
+
+  // ── ensamblar todo el CSV ────────────────────────────────────────────────
+  // \uFEFF = BOM (Byte Order Mark): le dice a Excel que el archivo es UTF-8
+  // sin esto, los acentos y la ñ se ven como caracteres raros en Excel en Windows
+  const csvContent = '\uFEFF' + [
+    seccionSesiones,
+    seccionDiaria,
+    seccionHoraria,
+    seccionComposicion,
+  ].join('\n');
+
+  // ── crear el Blob y disparar la descarga ─────────────────────────────────
+  const blob = new Blob(
+    [csvContent],
+    { type: 'text/csv;charset=utf-8;' }  // MIME type correcto para CSV
+  );
+
+  const url  = URL.createObjectURL(blob); // URL temporal en memoria
+  const link = document.createElement('a');
+  link.href     = url;
+  link.download = `reporte-smvi-${new Date().toISOString().slice(0, 10)}.csv`;
+
+  document.body.appendChild(link);  // necesario para Firefox
+  link.click();                      // dispara la descarga
+  document.body.removeChild(link);  // limpieza inmediata
+  URL.revokeObjectURL(url);          // libera la memoria del Blob
+};
+
+  // ── render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-5 p-5" style={{ color: '#E2EAF0' }}>
+    // ↓ Este ref es el que html2canvas captura
+    <div ref={reportRef} className="flex flex-col gap-5 p-5" style={{ color: '#E2EAF0' }}>
+
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 style={{ fontSize: 22, fontWeight: 700, color: '#FFFFFF' }}>Reportes y Análisis Histórico</h1>
@@ -97,7 +327,7 @@ export function Reportes() {
               style={{ background: 'transparent', border: 'none', color: '#E2EAF0', fontSize: 12, outline: 'none', cursor: 'pointer' }} />
           </div>
 
-          {/* Camera multi-select */}
+          {/* Camera select */}
           <div className="relative">
             <select style={{
               background: '#1A2B3C', border: '1px solid #263D52', borderRadius: 8,
@@ -105,9 +335,7 @@ export function Reportes() {
               outline: 'none', cursor: 'pointer', appearance: 'none',
             }}>
               <option>Todas las cámaras</option>
-              <option>CAM 01</option>
-              <option>CAM 02</option>
-              <option>CAM 03</option>
+              <option>CAM 01</option><option>CAM 02</option><option>CAM 03</option>
             </select>
             <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#6B7280' }} />
           </div>
@@ -120,17 +348,35 @@ export function Reportes() {
             <BarChart3 size={14} />
             Generar Reporte
           </button>
-          <button className="flex items-center gap-2" style={{
-            background: 'transparent', color: '#1E90FF', border: '1px solid #1E90FF', borderRadius: 8,
-            padding: '8px 14px', fontSize: 12, cursor: 'pointer',
-          }}>
-            <FileText size={13} />
-            Exportar PDF
+
+          {/* ↓ Botón PDF — llama handleExportPDF y muestra spinner mientras exporta */}
+          <button
+            onClick={handleExportPDF}
+            disabled={exportingPdf}
+            className="flex items-center gap-2"
+            style={{
+              background: 'transparent', color: exportingPdf ? '#6B7280' : '#1E90FF',
+              border: `1px solid ${exportingPdf ? '#263D52' : '#1E90FF'}`,
+              borderRadius: 8, padding: '8px 14px', fontSize: 12,
+              cursor: exportingPdf ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+            }}
+          >
+            {exportingPdf
+              ? <><Loader2 size={13} className="animate-spin" /> Generando...</>
+              : <><FileText size={13} /> Exportar PDF</>
+            }
           </button>
-          <button className="flex items-center gap-2" style={{
-            background: 'transparent', color: '#1E90FF', border: '1px solid #1E90FF', borderRadius: 8,
-            padding: '8px 14px', fontSize: 12, cursor: 'pointer',
-          }}>
+
+           <button
+            onClick={handleExportCSV}
+            className="flex items-center gap-2"
+            style={{
+              background: 'transparent', color: '#1E90FF',
+              border: '1px solid #1E90FF', borderRadius: 8,
+              padding: '8px 14px', fontSize: 12, cursor: 'pointer',
+            }}
+          >
             <Download size={13} />
             Exportar CSV
           </button>
@@ -147,43 +393,31 @@ export function Reportes() {
 
       {/* Charts row */}
       <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        {/* Bar chart */}
         <div className="rounded-xl p-5" style={{ background: '#1A2B3C', border: '1px solid #263D52' }}>
           <h3 style={{ fontSize: 13, fontWeight: 600, color: '#E2EAF0', marginBottom: 16 }}>Flujo diario — últimos 7 días</h3>
           <div style={{ height: 220 }}>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}
-                barCategoryGap="25%" barGap={2}>
+              <BarChart data={barData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }} barCategoryGap="25%" barGap={2}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(38,61,82,0.8)" vertical={false} />
                 <XAxis dataKey="dia" tick={{ fontSize: 11, fill: '#6B7280' }} axisLine={false} tickLine={false} />
                 <YAxis domain={[0, 2000]} tick={{ fontSize: 10, fill: '#6B7280' }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 11, color: '#8899AA', paddingTop: 8 }} />
                 <Bar dataKey="vehiculos" fill="#1E90FF" radius={[3, 3, 0, 0]} name="Vehículos" maxBarSize={28} />
-                <Bar dataKey="peatones" fill="#F97316" radius={[3, 3, 0, 0]} name="Peatones" maxBarSize={28} />
+                <Bar dataKey="peatones"  fill="#F97316" radius={[3, 3, 0, 0]} name="Peatones"  maxBarSize={28} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Donut chart */}
         <div className="rounded-xl p-5" style={{ background: '#1A2B3C', border: '1px solid #263D52' }}>
           <h3 style={{ fontSize: 13, fontWeight: 600, color: '#E2EAF0', marginBottom: 16 }}>Composición vehicular</h3>
           <div className="flex items-center gap-6">
             <div style={{ width: 180, height: 180, flexShrink: 0 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={3}
-                    dataKey="value"
-                    labelLine={false}
-                    label={CustomLabel}
-                  >
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80}
+                    paddingAngle={3} dataKey="value" labelLine={false} label={CustomLabel}>
                     {pieData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
                     ))}
@@ -197,8 +431,6 @@ export function Reportes() {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-
-            {/* Legend */}
             <div className="flex flex-col gap-3">
               {pieData.map((item) => (
                 <div key={item.name} className="flex items-center gap-3">
@@ -235,16 +467,12 @@ export function Reportes() {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={hourlyData} margin={{ top: 5, right: 20, bottom: 5, left: -10 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(38,61,82,0.8)" />
-              <XAxis dataKey="hora" tick={{ fontSize: 9, fill: '#6B7280' }} axisLine={false} tickLine={false}
-                interval={2} />
+              <XAxis dataKey="hora" tick={{ fontSize: 9, fill: '#6B7280' }} axisLine={false} tickLine={false} interval={2} />
               <YAxis tick={{ fontSize: 10, fill: '#6B7280' }} axisLine={false} tickLine={false} />
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: 11, color: '#8899AA', paddingTop: 8 }} />
-              {/* Peak reference areas */}
-              <Line type="monotone" dataKey="vehiculos" stroke="#1E90FF" strokeWidth={2}
-                dot={false} name="Vehículos" />
-              <Line type="monotone" dataKey="peatones" stroke="#F97316" strokeWidth={2}
-                dot={false} name="Peatones" />
+              <Line type="monotone" dataKey="vehiculos" stroke="#1E90FF" strokeWidth={2} dot={false} name="Vehículos" />
+              <Line type="monotone" dataKey="peatones"  stroke="#F97316" strokeWidth={2} dot={false} name="Peatones" />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -288,9 +516,7 @@ export function Reportes() {
                       {row.anomalias} anomalía{row.anomalias !== 1 ? 's' : ''}
                     </span>
                   ) : (
-                    <span className="rounded-full px-2 py-0.5" style={{ fontSize: 11, background: 'rgba(34,197,94,0.12)', color: '#22C55E' }}>
-                      Sin anomalías
-                    </span>
+                    <span className="rounded-full px-2 py-0.5" style={{ fontSize: 11, background: 'rgba(34,197,94,0.12)', color: '#22C55E' }}>Sin anomalías</span>
                   )}
                 </td>
               </tr>
@@ -298,16 +524,15 @@ export function Reportes() {
           </tbody>
         </table>
       </div>
+
     </div>
   );
 }
 
+// ─── StatCard ─────────────────────────────────────────────────────────────────
+
 function StatCard({ icon, value, label, change, changeColor }: {
-  icon: ReactNode;
-  value: string;
-  label: string;
-  change: string;
-  changeColor: string;
+  icon: ReactNode; value: string; label: string; change: string; changeColor: string;
 }) {
   return (
     <div className="rounded-xl p-5 flex flex-col gap-3" style={{ background: '#1A2B3C', border: '1px solid #263D52' }}>
